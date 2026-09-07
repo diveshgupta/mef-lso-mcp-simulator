@@ -1,0 +1,48 @@
+"""
+Unit tests for MEF LSO Sonata MCP Tools.
+"""
+
+import pytest
+from server import validate_geographic_address, create_quote
+
+
+def test_validate_geographic_address_valid():
+    result = validate_geographic_address(
+        street_name="123 Cyberport Rd",
+        city="Hong Kong",
+        country="HK"
+    )
+    assert result["validationResult"] == "valid"
+    assert result["geographicAddress"]["country"] == "HK"
+    assert "ADDR-" in result["geographicAddress"]["id"]
+
+
+def test_validate_geographic_address_invalid_country():
+    result = validate_geographic_address(
+        street_name="123 Test St",
+        city="Sydney",
+        country="AUSTRALIA"
+    )
+    assert result["validationResult"] == "invalid"
+
+
+def test_create_quote_uni_success():
+    quote = create_quote(
+        product_type="UNI",
+        bandwidth_mbps=10000,
+        address_id="ADDR-12345",
+        buyer_id="ConsoleConnect"
+    )
+    assert quote["state"] == "approved"
+    assert quote["quoteItem"][0]["product"]["productConfiguration"]["bandwidth"] == 10000
+    assert quote["quoteItem"][0]["price"]["dutyFreeAmount"]["value"] > 0
+
+
+def test_create_quote_unsupported_product():
+    quote = create_quote(
+        product_type="INVALID_TYPE",
+        bandwidth_mbps=1000,
+        address_id="ADDR-12345",
+        buyer_id="ConsoleConnect"
+    )
+    assert quote["status"] == "rejected"

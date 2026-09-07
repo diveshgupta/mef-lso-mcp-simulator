@@ -1,0 +1,5 @@
+mef-lso-mcp-simulator/
+├── server.py
+├── test_server.py
+├── README.md
+└── requirements.txt

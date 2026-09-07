@@ -1,0 +1,116 @@
+"""
+MEF LSO Sonata Quote & Address Validation MCP Server Simulator.
+Implements Model Context Protocol (MCP) tools for interacting with MEF-compliant APIs.
+"""
+
+from typing import Dict, Any, Optional
+from mcp.server.fastmcp import FastMCP
+
+# Initialize FastMCP Server
+mcp = FastMCP("MEF-LSO-Sonata-Simulator")
+
+
+@mcp.tool()
+def validate_geographic_address(
+    street_name: str,
+    city: str,
+    country: str,
+    postal_code: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Validates a geographic address against MEF 121 / MEF 79 standards.
+    
+    :param street_name: Street address or location description
+    :param city: City name
+    :param country: ISO 3166-1 alpha-2 country code (e.g., 'HK', 'AU', 'US')
+    :param postal_code: Optional postal/ZIP code
+    """
+    # Mock address validation logic based on MEF FieldedAddress spec
+    if not country or len(country) != 2:
+        return {
+            "validationResult": "invalid",
+            "message": "Invalid country code. Must be ISO 3166-1 alpha-2."
+        }
+
+    address_id = f"ADDR-{hash(street_name + city) & 0xFFFFFF}"
+    
+    return {
+        "validationResult": "valid",
+        "geographicAddress": {
+            "id": address_id,
+            "@type": "FieldedAddress",
+            "streetName": street_name,
+            "city": city,
+            "country": country.upper(),
+            "postalCode": postal_code or "N/A"
+        }
+    }
+
+
+@mcp.tool()
+def create_quote(
+    product_type: str,
+    bandwidth_mbps: int,
+    address_id: str,
+    buyer_id: str
+) -> Dict[str, Any]:
+    """
+    Submits a quote request for network services (e.g., UNI, ACCESS_E_LINE) per MEF 115 / MEF 80.
+    
+    :param product_type: Type of network product ('UNI', 'ACCESS_E_LINE')
+    :param bandwidth_mbps: Speed/bandwidth in Mbps (e.g., 1000, 10000)
+    :param address_id: Validated MEF Geographic Address Reference ID
+    :param buyer_id: Identifier of the purchasing organization
+    """
+    valid_products = ["UNI", "ACCESS_E_LINE"]
+    if product_type.upper() not in valid_products:
+        return {
+            "status": "rejected",
+            "reason": f"Unsupported product type. Must be one of {valid_products}"
+        }
+
+    quote_id = f"QUOTE-{hash(buyer_id + address_id) & 0xFFFFFF}"
+    
+    # Calculate estimated monthly price based on bandwidth
+    base_rate = 50 if product_type.upper() == "UNI" else 150
+    estimated_mrc = base_rate + (bandwidth_mbps * 0.05)
+
+    return {
+        "id": quote_id,
+        "state": "approved",
+        "buyerRequestedQuoteLevel": "firm",
+        "instantSyncQuote": True,
+        "quoteItem": [
+            {
+                "id": "1",
+                "action": "add",
+                "state": "approved",
+                "product": {
+                    "productOffering": {"id": product_type.upper()},
+                    "productConfiguration": {
+                        "@type": product_type.upper(),
+                        "bandwidth": bandwidth_mbps,
+                        "bandwidthUnit": "MBPS"
+                    },
+                    "place": [
+                        {
+                            "role": "INSTALL_LOCATION",
+                            "id": address_id,
+                            "@type": "GeographicAddressRef"
+                        }
+                    ]
+                },
+                "price": {
+                    "dutyFreeAmount": {
+                        "unit": "USD",
+                        "value": round(estimated_mrc, 2)
+                    },
+                    "priceType": "recurring"
+                }
+            }
+        ]
+    }
+
+
+if __name__ == "__main__":
+    mcp.run()
